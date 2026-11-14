@@ -137,7 +137,7 @@
               }
             },
             {
-              "fieldLabel": "I acknowledge the privacy notice and consent to processing this inquiry",
+              "fieldLabel": "I acknowledge the privacy information provided by this business for handling my inquiry",
               "fieldName": "consent",
               "fieldType": "checkbox",
               "requiredField": true
@@ -207,7 +207,7 @@
         80
       ],
       "parameters": {
-        "jsCode": "// Elapsed hours after submission, then after each successful stage.\nconst stages = { Critical: [1, 2, 4], High: [4, 8, 24], Normal: [24, 24, 48], Low: [48, 48, 72] };\nconst intervals = stages[$json.priority] ?? stages.Normal;\nconst submitted = Date.parse($json.submitted_at);\nconst firstDue = new Date(submitted + intervals[0] * 3600000).toISOString();\nreturn [{json:{...$json,follow_up_due_at:firstDue,next_reminder_due_at:firstDue,reminder_stage:0,reminder_count:0,escalation_state:'not_escalated',last_notification_outcome:'pending',notification_attempts:0,last_duplicate_at:null,follow_up_intervals_hours:intervals}}];"
+        "jsCode": "// Elapsed hours after submission, then after each successful stage.\nconst stages = { Critical: [1, 2, 4], High: [4, 8, 24], Normal: [24, 24, 48], Low: [48, 48, 72] };\nconst intervals = stages[$json.priority] ?? stages.Normal;\nconst submitted = Date.parse($json.submitted_at);\nconst firstDue = new Date(submitted + intervals[0] * 3600000).toISOString();\nreturn [{json:{...$json,follow_up_due_at:firstDue,next_reminder_due_at:firstDue,reminder_stage:0,reminder_count:0,reminder_retry_count:0,last_retry_at:null,last_retry_error:'',delivery_failure_state:'none',escalation_state:'not_escalated',last_notification_outcome:'pending',notification_attempts:0,last_duplicate_at:null,follow_up_intervals_hours:intervals}}];"
       }
     },
     {
@@ -475,7 +475,7 @@
         "width": 1060,
         "height": 120,
         "color": 0,
-        "content": "## 3 · Scheduled reminders and escalation\nThis lower path runs hourly after publication. **Explain reminder eligibility** exposes an eligibility decision and reason for every row. New/Acknowledged/In progress can continue; Waiting for customer pauses; Resolved/Closed stop. Successful SMTP acceptance advances `next_reminder_due_at`; a failed send records `retry_pending` for a one-hour retry without advancing stage."
+        "content": "## 3 · Scheduled reminders and escalation\nThis lower path runs hourly after publication. **Explain reminder eligibility** exposes an eligibility decision and reason for every row. New/Acknowledged/In progress can continue; Waiting for customer pauses; Resolved/Closed stop. Successful SMTP acceptance advances `next_reminder_due_at` from acceptance time. A failed send records `retry_pending` for a one-hour retry without advancing stage; after 3 failed attempts it becomes `delivery_failed` and stops automatically."
       }
     },
     {
@@ -529,7 +529,7 @@
         610
       ],
       "parameters": {
-        "jsCode": "const maxReminders = 3; const eligibleStatuses = ['New', 'Acknowledged', 'In progress']; const now = Date.now();\nreturn $input.all().map(({json: r}) => {\n  const reasons = []; const dueAt = r.next_reminder_due_at ?? r.follow_up_due_at; const stage = Number(r.reminder_stage || 0);\n  if (!eligibleStatuses.includes(r.status)) reasons.push('status ' + r.status + ' is paused or complete');\n  if (r.processing_state !== 'stored') reasons.push('processing_state is not stored');\n  if (Number(r.reminder_count || 0) >= maxReminders) reasons.push('maximum reminder count reached');\n  if (!dueAt || Number.isNaN(Date.parse(dueAt))) reasons.push('next_reminder_due_at is missing or invalid');\n  else if (Date.parse(dueAt) > now) reasons.push('next reminder is not due yet');\n  return { json: { ...r, next_reminder_due_at: dueAt, reminder_action: stage >= 2 ? 'escalation' : 'reminder', reminder_eligible: reasons.length === 0, reminder_skip_reason: reasons.join('; ') || 'eligible now', reminder_checked_at: new Date(now).toISOString() } };\n});"
+        "jsCode": "const maxReminders = 3; const eligibleStatuses = ['New', 'Acknowledged', 'In progress']; const now = Date.now();\nreturn $input.all().map(({json: r}) => {\n  const reasons = []; const dueAt = r.next_reminder_due_at ?? r.follow_up_due_at; const stage = Number(r.reminder_stage || 0);\n  if (!eligibleStatuses.includes(r.status)) reasons.push('status ' + r.status + ' is paused or complete');\n  if (r.processing_state !== 'stored') reasons.push('processing_state is not stored');\n  if (r.delivery_failure_state === 'delivery_failed') reasons.push('terminal delivery retry limit reached');\n  if (Number(r.reminder_count || 0) >= maxReminders) reasons.push('maximum reminder count reached');\n  if (!dueAt || Number.isNaN(Date.parse(dueAt))) reasons.push('next_reminder_due_at is missing or invalid');\n  else if (Date.parse(dueAt) > now) reasons.push('next reminder is not due yet');\n  return { json: { ...r, next_reminder_due_at: dueAt, reminder_action: stage >= 2 ? 'escalation' : 'reminder', reminder_eligible: reasons.length === 0, reminder_skip_reason: reasons.join('; ') || 'eligible now', reminder_checked_at: new Date(now).toISOString() } };\n});"
       }
     },
     {
@@ -557,7 +557,6 @@
       "continueOnFail": true,
       "parameters": {
         "fromEmail": "replace-with-sender@example.com",
-        "toEmail": "replace-with-internal-email@example.com",
         "toEmail": "={{ $json.reminder_action === 'escalation' ? 'replace-with-escalation-email@example.com' : 'replace-with-internal-email@example.com' }}",
         "subject": "={{ '[' + ($json.reminder_action === 'escalation' ? 'Escalation ' : 'Follow-up ') + $json.priority + '] ' + $json.inquiry_id + ' needs attention' }}",
         "emailFormat": "text",
@@ -623,7 +622,11 @@
             "last_activity_at": "={{ $now.toISO() }}",
             "notification_state": "reminder_provider_accepted",
             "last_notification_outcome": "provider_accepted",
-            "next_reminder_due_at": "={{ (() => { const r = $('Send only eligible reminders').item.json; const schedule = { Critical: [1,2,4], High: [4,8,24], Normal: [24,24,48], Low: [48,48,72] }; const nextStage = Number(r.reminder_stage || 0) + 1; const hours = schedule[r.priority]?.[nextStage]; return hours ? new Date(Date.parse(r.next_reminder_due_at) + hours * 3600000).toISOString() : null; })() }}",
+            "reminder_retry_count": 0,
+            "last_retry_at": null,
+            "last_retry_error": "",
+            "delivery_failure_state": "none",
+            "next_reminder_due_at": "={{ (() => { const r = $('Send only eligible reminders').item.json; const schedule = { Critical: [1,2,4], High: [4,8,24], Normal: [24,24,48], Low: [48,48,72] }; const nextStage = Number(r.reminder_stage || 0) + 1; const hours = schedule[r.priority]?.[nextStage]; return hours ? new Date(Date.now() + hours * 3600000).toISOString() : null; })() }}",
             "escalation_state": "={{ $('Send only eligible reminders').item.json.reminder_action === 'escalation' ? 'escalated' : 'not_escalated' }}"
           }
         }
@@ -644,7 +647,7 @@
         "dataTableId": {"__rl":true,"value":"REPLACE_WITH_DATA_TABLE_ID","mode":"id"},
         "matchType": "allConditions",
         "filters": {"conditions":[{"keyName":"inquiry_id","condition":"eq","keyValue":"={{ $('Send only eligible reminders').item.json.inquiry_id }}"}]},
-        "columns": {"mappingMode":"defineBelow","value":{"notification_state":"retry_pending","last_notification_outcome":"failed","error_state":"reminder_email_failed","next_reminder_due_at":"={{ new Date(Date.now() + 3600000).toISOString() }}","last_activity_at":"={{ $now.toISO() }}"}}
+        "columns": {"mappingMode":"defineBelow","value":{"notification_state":"={{ (() => { const n = Number($('Send only eligible reminders').item.json.reminder_retry_count || 0) + 1; return n >= 3 ? 'delivery_failed' : 'retry_pending'; })() }}","last_notification_outcome":"failed","error_state":"reminder_email_failed","reminder_retry_count":"={{ Number($('Send only eligible reminders').item.json.reminder_retry_count || 0) + 1 }}","last_retry_at":"={{ $now.toISO() }}","last_retry_error":"={{ String($json.error?.message ?? $json.error ?? 'SMTP provider did not accept reminder').slice(0, 500) }}","delivery_failure_state":"={{ (() => { const n = Number($('Send only eligible reminders').item.json.reminder_retry_count || 0) + 1; return n >= 3 ? 'delivery_failed' : 'retry_pending'; })() }}","next_reminder_due_at":"={{ (() => { const n = Number($('Send only eligible reminders').item.json.reminder_retry_count || 0) + 1; return n >= 3 ? null : new Date(Date.now() + 60 * 60000).toISOString(); })() }}","last_activity_at":"={{ $now.toISO() }}"}}
       }
     },
     {
@@ -660,7 +663,7 @@
         "width": 320,
         "height": 120,
         "color": 5,
-        "content": "## 4 · Failure handling\nStorage failures stop the run and remain visible in Executions. Email nodes continue after failure so the saved record is marked failed. Fix credentials, inspect the execution, then safely retry; confirm record state first."
+        "content": "## 4 · Failure handling\nStorage failures stop the run and remain visible in Executions. Email nodes continue after failure so the saved record is marked failed. Reminder delivery retries are bounded: failure 1–2 is `retry_pending`; failure 3 is `delivery_failed`. Fix credentials, inspect the execution, then reset only the failed reminder fields described in SETUP before resuming."
       }
     }
   ],

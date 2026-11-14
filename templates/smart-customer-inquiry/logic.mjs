@@ -28,9 +28,46 @@ export function evaluateReminder(record, now = new Date()) {
   const reasons = []; const due = record.next_reminder_due_at ?? record.follow_up_due_at;
   if (!['New', 'Acknowledged', 'In progress'].includes(record.status)) reasons.push(`status ${record.status} is paused or complete`);
   if (record.processing_state !== 'stored') reasons.push('processing_state is not stored');
+  if (record.delivery_failure_state === 'delivery_failed') reasons.push('terminal delivery retry limit reached');
   if (Number(record.reminder_count || 0) >= CONFIG.maxReminders) reasons.push('maximum reminder count reached');
   if (!due || Number.isNaN(Date.parse(due))) reasons.push('next_reminder_due_at is missing or invalid');
   else if (Date.parse(due) > now.getTime()) reasons.push('next reminder is not due yet');
   return { eligible: reasons.length === 0, reason: reasons.join('; ') || 'eligible now', action: Number(record.reminder_stage || 0) >= 2 ? 'escalation' : 'reminder' };
+}
+export function applyReminderDeliveryResult(record, { accepted, now = new Date(), error = '' } = {}) {
+  const timestamp = now.toISOString();
+  if (accepted) {
+    const reminder_stage = Number(record.reminder_stage || 0) + 1;
+    const hours = CONFIG.followUpStages[record.priority]?.[reminder_stage];
+    return {
+      ...record,
+      reminder_count: Number(record.reminder_count || 0) + 1,
+      reminder_stage,
+      last_reminder_at: timestamp,
+      last_activity_at: timestamp,
+      reminder_retry_count: 0,
+      last_retry_at: null,
+      last_retry_error: '',
+      delivery_failure_state: 'none',
+      notification_state: 'reminder_provider_accepted',
+      last_notification_outcome: 'provider_accepted',
+      next_reminder_due_at: hours ? new Date(now.getTime() + hours * 3600000).toISOString() : null,
+      escalation_state: record.reminder_action === 'escalation' ? 'escalated' : 'not_escalated',
+    };
+  }
+  const reminder_retry_count = Number(record.reminder_retry_count || 0) + 1;
+  const terminal = reminder_retry_count >= 3;
+  return {
+    ...record,
+    reminder_retry_count,
+    last_retry_at: timestamp,
+    last_retry_error: String(error || 'SMTP provider did not accept reminder').slice(0, 500),
+    delivery_failure_state: terminal ? 'delivery_failed' : 'retry_pending',
+    notification_state: terminal ? 'delivery_failed' : 'retry_pending',
+    last_notification_outcome: 'failed',
+    error_state: 'reminder_email_failed',
+    next_reminder_due_at: terminal ? null : new Date(now.getTime() + 60 * 60000).toISOString(),
+    last_activity_at: timestamp,
+  };
 }
 export const transitions = { New:['Acknowledged','In progress','Closed'], Acknowledged:['In progress','Waiting for customer','Resolved','Closed'], 'In progress':['Waiting for customer','Resolved','Closed'], 'Waiting for customer':['In progress','Resolved','Closed'], Resolved:['Closed'], Closed:[] };

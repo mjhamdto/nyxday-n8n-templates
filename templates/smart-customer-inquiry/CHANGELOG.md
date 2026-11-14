@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.1 — Final quality patch
+
+- Removed the duplicate raw `toEmail` key from the follow-up SMTP node and added a raw-JSON duplicate-key test that runs before normal JSON parsing.
+- Bounded reminder delivery attempts to three failed sends (including the original failed attempt), with durable retry audit fields and terminal `delivery_failed` state.
+- Scheduled each later reminder from actual SMTP provider acceptance time instead of the prior due timestamp.
+- Documented terminal-failure recovery, privacy-notice configuration, elapsed-time/timezone semantics, and the deliberate all-row diagnostic Data Table read.
+- Expanded automated coverage for retry, terminal failure, acceptance-time scheduling, recipient selection, and Slack-safe defaults.
+
 ## v1.1 — Smart Customer Inquiry & Follow-Up Manager
 
 - Added visible priority routing for Critical, High, Normal, and Low inquiries.
