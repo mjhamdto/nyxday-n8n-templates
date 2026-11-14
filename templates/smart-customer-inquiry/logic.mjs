@@ -2,6 +2,7 @@ export const CONFIG = Object.freeze({
   businessName: 'Your business', notificationEmail: 'replace-with-internal-email@example.com',
   defaultOwner: 'Unassigned', duplicateWindowHours: 24, maxReminders: 3,
   reminders: { Critical: 1, High: 4, Normal: 24, Low: 48 },
+  followUpStages: { Critical: [1, 2, 4], High: [4, 8, 24], Normal: [24, 24, 48], Low: [48, 48, 72] },
 });
 export function normalize(raw, now = new Date()) {
   const str = (v, max) => typeof v === 'string' ? v.trim().replace(/\s+/g, ' ').slice(0, max) : '';
@@ -23,4 +24,13 @@ export function normalize(raw, now = new Date()) {
 }
 export function isDuplicate(candidate, records, now = new Date()) { const cutoff = now.getTime()-CONFIG.duplicateWindowHours*3600000; return records.find(r => r.dedupe_key === candidate.dedupe_key && Date.parse(r.submitted_at) >= cutoff) || null; }
 export function reminderEligible(record, now = new Date()) { return !['Resolved','Closed'].includes(record.status) && record.processing_state === 'stored' && Number(record.reminder_count || 0) < CONFIG.maxReminders && Date.parse(record.follow_up_due_at) <= now.getTime(); }
+export function evaluateReminder(record, now = new Date()) {
+  const reasons = []; const due = record.next_reminder_due_at ?? record.follow_up_due_at;
+  if (!['New', 'Acknowledged', 'In progress'].includes(record.status)) reasons.push(`status ${record.status} is paused or complete`);
+  if (record.processing_state !== 'stored') reasons.push('processing_state is not stored');
+  if (Number(record.reminder_count || 0) >= CONFIG.maxReminders) reasons.push('maximum reminder count reached');
+  if (!due || Number.isNaN(Date.parse(due))) reasons.push('next_reminder_due_at is missing or invalid');
+  else if (Date.parse(due) > now.getTime()) reasons.push('next reminder is not due yet');
+  return { eligible: reasons.length === 0, reason: reasons.join('; ') || 'eligible now', action: Number(record.reminder_stage || 0) >= 2 ? 'escalation' : 'reminder' };
+}
 export const transitions = { New:['Acknowledged','In progress','Closed'], Acknowledged:['In progress','Waiting for customer','Resolved','Closed'], 'In progress':['Waiting for customer','Resolved','Closed'], 'Waiting for customer':['In progress','Resolved','Closed'], Resolved:['Closed'], Closed:[] };
