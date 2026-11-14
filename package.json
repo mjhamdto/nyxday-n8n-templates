@@ -1,0 +1,9 @@
+{
+  "name": "nyxday-n8n-templates",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Free, open-source n8n templates from NyxDay Inc.",
+  "scripts": { "test": "node --test templates/smart-customer-inquiry/tests/*.test.mjs", "validate": "npm test" },
+  "license": "MIT",
+  "engines": { "node": ">=20" }
+}

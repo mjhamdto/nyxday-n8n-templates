@@ -1,0 +1,721 @@
+{
+  "name": "Smart Customer Inquiry & Follow-Up Manager",
+  "nodes": [
+    {
+      "id": "note-overview",
+      "name": "Read me — overview and setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -760,
+        -520
+      ],
+      "parameters": {
+        "width": 760,
+        "height": 300,
+        "color": 2,
+        "content": "## Smart Customer Inquiry & Follow-Up Manager\n### How it works\nA public n8n Form captures an inquiry. The workflow normalizes it, applies transparent priority rules, checks a Data Table for the same normalized email + subject + message within the configured window, stores only new inquiries, then optionally sends an internal SMTP alert. A schedule then checks stored, open records and sends limited internal reminders.\n\n### Setup\nCreate a Data Table named `customer_inquiries` with the columns in SETUP.md, then replace `REPLACE_WITH_DATA_TABLE_ID` in each Data Table node. Edit the clearly marked CONFIG object in **Normalize, validate & classify** and add an SMTP credential to the two email nodes. Set the workflow timezone, test with the Form Trigger test URL, then publish before using the production form URL.\n\n### Customization tips\nUse the Data Tables UI to change status safely. The default sends no customer email. Add bot protection at your website/proxy; n8n Form's Ignore Bots option is helpful but not a complete anti-abuse service."
+      }
+    },
+    {
+      "id": "note-intake",
+      "name": "1 · Inquiry intake",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -760,
+        -120
+      ],
+      "parameters": {
+        "width": 350,
+        "height": 120,
+        "color": 0,
+        "content": "## 1 · Start here: inquiry intake\nFor a test, open **Customer inquiry form** and click **Execute step**. Submit the test URL it opens. This upper path then stores and alerts. It is independent from the hourly reminder path below."
+      }
+    },
+    {
+      "id": "form",
+      "name": "Customer inquiry form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -620,
+        80
+      ],
+      "webhookId": "smart-customer-inquiry",
+      "parameters": {
+        "formTitle": "Contact us",
+        "formDescription": "Tell us how we can help. We use this information only to respond to your inquiry.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Full name",
+              "fieldName": "full_name",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "Your name"
+            },
+            {
+              "fieldLabel": "Email address",
+              "fieldName": "email",
+              "fieldType": "email",
+              "requiredField": true,
+              "placeholder": "you@example.com"
+            },
+            {
+              "fieldLabel": "Phone number",
+              "fieldName": "phone",
+              "fieldType": "text",
+              "placeholder": "Optional"
+            },
+            {
+              "fieldLabel": "Company name",
+              "fieldName": "company",
+              "fieldType": "text",
+              "placeholder": "Optional"
+            },
+            {
+              "fieldLabel": "Inquiry category",
+              "fieldName": "category",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "General inquiry"
+                  },
+                  {
+                    "option": "Sales / quotation"
+                  },
+                  {
+                    "option": "Technical support"
+                  },
+                  {
+                    "option": "Existing customer"
+                  },
+                  {
+                    "option": "Partnership"
+                  },
+                  {
+                    "option": "Complaint"
+                  },
+                  {
+                    "option": "Other"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Subject",
+              "fieldName": "subject",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "How can we help?"
+            },
+            {
+              "fieldLabel": "Message",
+              "fieldName": "message",
+              "fieldType": "textarea",
+              "requiredField": true,
+              "placeholder": "Please do not include passwords or payment details."
+            },
+            {
+              "fieldLabel": "Preferred contact method",
+              "fieldName": "preferred_contact_method",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Email"
+                  },
+                  {
+                    "option": "Phone"
+                  },
+                  {
+                    "option": "No preference"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "I acknowledge the privacy notice and consent to processing this inquiry",
+              "fieldName": "consent",
+              "fieldType": "checkbox",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "path": "customer-inquiry",
+          "buttonLabel": "Send inquiry",
+          "ignoreBots": true,
+          "appendAttribution": false,
+          "useWorkflowTimezone": true
+        },
+        "responseMode": "lastNode",
+        "formSubmittedText": "Thanks — your inquiry has been received. We will respond through your selected contact method."
+      }
+    },
+    {
+      "id": "map-form-fields",
+      "name": "Map form fields (version compatibility)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        80
+      ],
+      "parameters": {
+        "jsCode": "// Form Trigger 2.2 returns labels; newer versions can return field names.\nconst canonical = (key) => String(key).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');\nconst values = Object.fromEntries(Object.entries($json).map(([key, value]) => [canonical(key), value]));\nconst get = (...keys) => { for (const key of keys) { const value = values[canonical(key)]; if (value !== undefined && value !== null) return value; } return ''; };\nconst consent = Object.entries($json).some(([key, value]) => /consent|acknowledge/i.test(key) && Boolean(value));\nreturn [{json:{full_name:get('full_name','full name','name'),email:get('email','email address'),phone:get('phone','phone number'),company:get('company','company name'),category:get('category','inquiry category'),subject:get('subject'),message:get('message'),preferred_contact_method:get('preferred_contact_method','preferred contact method'),consent}}];"
+      }
+    },
+    {
+      "id": "note-rules",
+      "name": "2 · Validate, classify and deduplicate",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        -120
+      ],
+      "parameters": {
+        "width": 720,
+        "height": 120,
+        "color": 0,
+        "content": "## 2 · Normalize, validate and deduplicate\nThe mapping node accepts both older label-based and newer custom field-name form output. The Code node then validates, applies priority rules, and calculates the duplicate fingerprint. Exact duplicates suppress a second alert."
+      }
+    },
+    {
+      "id": "normalize",
+      "name": "Normalize, validate & classify (CONFIG HERE)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -300,
+        80
+      ],
+      "parameters": {
+        "jsCode": "// CONFIGURATION: edit plain values here; no credentials belong here.\nconst cfg = { duplicateWindowHours: 24, defaultOwner: 'Unassigned', requireConsent: true, reminderHours: { Critical: 1, High: 4, Normal: 24, Low: 48 } };\nconst asText = (value, max) => typeof value === 'string' ? value.trim().replace(/\\s+/g, ' ').slice(0, max) : '';\nconst raw = $json; const full_name = asText(raw.full_name, 120); const email = asText(raw.email, 254).toLowerCase(); const subject = asText(raw.subject, 200); const message = asText(raw.message, 5000); const consent = raw.consent === true || raw.consent === 'true';\nif (!full_name || !email || !subject || !message) throw new Error('Full name, email, subject, and message are required.');\nif (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/u.test(email)) throw new Error('Enter a valid email address.'); if (cfg.requireConsent && !consent) throw new Error('Please acknowledge the privacy notice before submitting.');\nconst allowed = ['General inquiry','Sales / quotation','Technical support','Existing customer','Partnership','Complaint','Other']; const category = allowed.includes(raw.category) ? raw.category : 'Other'; const text = `${subject} ${message}`.toLowerCase();\nconst urgent = /\\b(urgent|outage|security incident|data loss|legal escalation)\\b/u.test(text); let priority = category === 'Partnership' ? 'Low' : 'Normal'; if ((category === 'Complaint' || category === 'Technical support') && urgent) priority = 'High'; if (category === 'Complaint' && /\\b(data loss|legal escalation)\\b/u.test(text)) priority = 'Critical'; if (category === 'Sales / quotation' && /\\b(urgent|asap)\\b/u.test(text)) priority = 'High';\nconst now = new Date(); const submitted_at = now.toISOString(); const inquiry_id = `INQ-${submitted_at.replace(/\\D/g,'').slice(0,14)}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;\nreturn [{json:{inquiry_id,full_name,email,phone:asText(raw.phone,50),company:asText(raw.company,160),category,subject,message,preferred_contact_method:asText(raw.preferred_contact_method,30),consent,priority,status:'New',assigned_owner:cfg.defaultOwner,source:'n8n-form',submitted_at,last_activity_at:submitted_at,follow_up_due_at:new Date(now.getTime()+cfg.reminderHours[priority]*3600000).toISOString(),reminder_count:0,last_reminder_at:null,notification_state:'pending',processing_state:'stored',error_state:'',duplicate_of:'',dedupe_key:`${email}|${subject.toLowerCase()}|${message.toLowerCase()}`,duplicate_window_start:new Date(now.getTime()-cfg.duplicateWindowHours*3600000).toISOString()}}];"
+      }
+    },
+    {
+      "id": "not-exists",
+      "name": "Is this a new inquiry?",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        40,
+        20
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "rowNotExists",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DATA_TABLE_ID",
+          "mode": "id"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "dedupe_key",
+              "condition": "eq",
+              "keyValue": "={{ $json.dedupe_key }}"
+            },
+            {
+              "keyName": "submitted_at",
+              "condition": "gte",
+              "keyValue": "={{ $json.duplicate_window_start }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "exists",
+      "name": "Is this a suspected duplicate?",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        40,
+        160
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "rowExists",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DATA_TABLE_ID",
+          "mode": "id"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "dedupe_key",
+              "condition": "eq",
+              "keyValue": "={{ $json.dedupe_key }}"
+            },
+            {
+              "keyName": "submitted_at",
+              "condition": "gte",
+              "keyValue": "={{ $json.duplicate_window_start }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "remove-query-helper",
+      "name": "Remove temporary duplicate-window value",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        270,
+        -40
+      ],
+      "parameters": {
+        "jsCode": "const { duplicate_window_start, ...record } = $json;\nreturn [{ json: record }];"
+      }
+    },
+    {
+      "id": "insert",
+      "name": "Store new inquiry",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        270,
+        20
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DATA_TABLE_ID",
+          "mode": "id"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {}
+        }
+      }
+    },
+    {
+      "id": "email",
+      "name": "Send internal new-inquiry alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        510,
+        20
+      ],
+      "continueOnFail": true,
+      "parameters": {
+        "fromEmail": "replace-with-sender@example.com",
+        "toEmail": "replace-with-internal-email@example.com",
+        "subject": "={{ '[' + $json.priority + '] New inquiry ' + $json.inquiry_id + ': ' + $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ 'Inquiry ID: ' + $json.inquiry_id + '\\nPriority: ' + $json.priority + '\\nCategory: ' + $json.category + '\\nFrom: ' + $json.full_name + ' <' + $json.email + '>\\nStatus: ' + $json.status + '\\nFollow-up due: ' + $json.follow_up_due_at + '\\n\\nMessage:\\n' + $json.message }}",
+        "options": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "mark-notified",
+      "name": "Record notification outcome",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        750,
+        20
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DATA_TABLE_ID",
+          "mode": "id"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "inquiry_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.inquiry_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "notification_state": "={{ $json.error ? 'failed' : 'sent' }}",
+            "last_activity_at": "={{ $now.toISO() }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "mark-duplicate",
+      "name": "Record duplicate activity (no alert)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        270,
+        160
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DATA_TABLE_ID",
+          "mode": "id"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "dedupe_key",
+              "condition": "eq",
+              "keyValue": "={{ $json.dedupe_key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "last_activity_at": "={{ $now.toISO() }}",
+            "error_state": "duplicate_suppressed"
+          }
+        }
+      }
+    },
+    {
+      "id": "note-reminder",
+      "name": "3 · Scheduled reminders",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -300,
+        400
+      ],
+      "parameters": {
+        "width": 1060,
+        "height": 120,
+        "color": 0,
+        "content": "## 3 · Scheduled reminders\nThis lower path runs every hour only after the workflow is published. **Explain reminder eligibility** outputs every stored row with `reminder_eligible` and a `reminder_skip_reason`. A reminder sends only when status is not Resolved/Closed, processing state is `stored`, due time has passed, and reminder count is below 3. Review that node's output first when no email is sent."
+      }
+    },
+    {
+      "id": "schedule",
+      "name": "Hourly follow-up check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -300,
+        610
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get-open",
+      "name": "Read inquiry records",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -70,
+        610
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DATA_TABLE_ID",
+          "mode": "id"
+        },
+        "returnAll": true
+      }
+    },
+    {
+      "id": "explain-eligibility",
+      "name": "Explain reminder eligibility",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        610
+      ],
+      "parameters": {
+        "jsCode": "const maxReminders = 3; const now = Date.now();\nreturn $input.all().map(({json: r}) => {\n  const reasons = [];\n  if (['Resolved', 'Closed'].includes(r.status)) reasons.push('status is ' + r.status);\n  if (r.processing_state !== 'stored') reasons.push('processing_state is not stored');\n  if (Number(r.reminder_count || 0) >= maxReminders) reasons.push('maximum reminder count reached');\n  if (!r.follow_up_due_at || Number.isNaN(Date.parse(r.follow_up_due_at))) reasons.push('follow_up_due_at is missing or invalid');\n  else if (Date.parse(r.follow_up_due_at) > now) reasons.push('follow-up is not due yet');\n  return { json: { ...r, reminder_eligible: reasons.length === 0, reminder_skip_reason: reasons.join('; ') || 'eligible now', reminder_checked_at: new Date(now).toISOString() } };\n});"
+      }
+    },
+    {
+      "id": "eligible",
+      "name": "Send only eligible reminders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        610
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().filter(({ json }) => json.reminder_eligible === true);"
+      }
+    },
+    {
+      "id": "reminder",
+      "name": "Send internal follow-up reminder",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        640,
+        610
+      ],
+      "continueOnFail": true,
+      "parameters": {
+        "fromEmail": "replace-with-sender@example.com",
+        "toEmail": "replace-with-internal-email@example.com",
+        "subject": "={{ '[Follow-up ' + $json.priority + '] ' + $json.inquiry_id + ' needs attention' }}",
+        "emailFormat": "text",
+        "text": "={{ 'Inquiry ' + $json.inquiry_id + ' remains ' + $json.status + '.\\nOwner: ' + $json.assigned_owner + '\\nDue: ' + $json.follow_up_due_at + '\\nReminder number: ' + (Number($json.reminder_count || 0) + 1) + '\\n\\nUpdate its status in the Data Tables UI when acted on.' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "record-reminder",
+      "name": "Record reminder delivery",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        890,
+        610
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_DATA_TABLE_ID",
+          "mode": "id"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "inquiry_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.inquiry_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "reminder_count": "={{ Number($json.reminder_count || 0) + 1 }}",
+            "last_reminder_at": "={{ $now.toISO() }}",
+            "last_activity_at": "={{ $now.toISO() }}",
+            "notification_state": "={{ $json.error ? 'reminder_failed' : 'reminder_sent' }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "note-failure",
+      "name": "4 · Failure handling",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        820,
+        400
+      ],
+      "parameters": {
+        "width": 320,
+        "height": 120,
+        "color": 5,
+        "content": "## 4 · Failure handling\nStorage failures stop the run and remain visible in Executions. Email nodes continue after failure so the saved record is marked failed. Fix credentials, inspect the execution, then safely retry; confirm record state first."
+      }
+    }
+  ],
+  "connections": {
+    "Customer inquiry form": {
+      "main": [
+        [
+          {
+            "node": "Map form fields (version compatibility)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map form fields (version compatibility)": {
+      "main": [
+        [
+          {
+            "node": "Normalize, validate & classify (CONFIG HERE)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize, validate & classify (CONFIG HERE)": {
+      "main": [
+        [
+          {
+            "node": "Is this a new inquiry?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is this a suspected duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is this a new inquiry?": {
+      "main": [
+        [
+          {
+            "node": "Remove temporary duplicate-window value",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove temporary duplicate-window value": {
+      "main": [
+        [
+          {
+            "node": "Store new inquiry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store new inquiry": {
+      "main": [
+        [
+          {
+            "node": "Send internal new-inquiry alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send internal new-inquiry alert": {
+      "main": [
+        [
+          {
+            "node": "Record notification outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is this a suspected duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Record duplicate activity (no alert)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hourly follow-up check": {
+      "main": [
+        [
+          {
+            "node": "Read inquiry records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read inquiry records": {
+      "main": [
+        [
+          {
+            "node": "Explain reminder eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explain reminder eligibility": {
+      "main": [
+        [
+          {
+            "node": "Send only eligible reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send only eligible reminders": {
+      "main": [
+        [
+          {
+            "node": "Send internal follow-up reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send internal follow-up reminder": {
+      "main": [
+        [
+          {
+            "node": "Record reminder delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "saveExecutionDataError": "all",
+    "saveExecutionDataSuccess": "none"
+  },
+  "active": false,
+  "versionId": "00000000-0000-4000-8000-000000000000",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

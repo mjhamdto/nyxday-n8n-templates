@@ -1,0 +1,5 @@
+[
+  {"full_name":"Élodie Tremblay","email":"elodie@example.test","phone":"","company":"Northstar Studio","category":"Sales / quotation","subject":"Quote for a website refresh","message":"Please send a quote for our 20-page website.","preferred_contact_method":"Email","consent":true},
+  {"full_name":"Sam Patel","email":"sam@example.test","phone":"555-0100","company":"","category":"Technical support","subject":"Production outage","message":"Our existing service is down. This is urgent and blocking customers.","preferred_contact_method":"Phone","consent":true},
+  {"full_name":"Invalid Example","email":"not-an-email","category":"General inquiry","subject":"Hello","message":"Test","consent":true}
+]
