@@ -377,8 +377,8 @@
       ],
       "continueOnFail": true,
       "parameters": {
-        "fromEmail": "replace-with-sender@example.com",
-        "toEmail": "replace-with-internal-email@example.com",
+        "fromEmail": "configure-sender@example.com",
+        "toEmail": "configure-internal-recipient@example.com",
         "subject": "={{ '[' + $json.priority + '] New inquiry ' + $json.inquiry_id + ': ' + $json.subject }}",
         "emailFormat": "text",
         "text": "={{ 'Inquiry ID: ' + $json.inquiry_id + '\\nPriority: ' + $json.priority + '\\nCategory: ' + $json.category + '\\nFrom: ' + $json.full_name + ' <' + $json.email + '>\\nStatus: ' + $json.status + '\\nFollow-up due: ' + $json.follow_up_due_at + '\\n\\nMessage:\\n' + $json.message }}",
@@ -560,8 +560,8 @@
       ],
       "continueOnFail": true,
       "parameters": {
-        "fromEmail": "replace-with-sender@example.com",
-        "toEmail": "={{ $json.reminder_action === 'escalation' ? 'replace-with-escalation-email@example.com' : 'replace-with-internal-email@example.com' }}",
+        "fromEmail": "configure-sender@example.com",
+        "toEmail": "={{ $json.reminder_action === 'escalation' ? 'configure-escalation-recipient@example.com' : 'configure-internal-recipient@example.com' }}",
         "subject": "={{ '[' + ($json.reminder_action === 'escalation' ? 'Escalation ' : 'Follow-up ') + $json.priority + '] ' + $json.inquiry_id + ' needs attention' }}",
         "emailFormat": "text",
         "text": "={{ 'Inquiry ' + $json.inquiry_id + ' remains ' + $json.status + '.\\nOwner: ' + $json.assigned_owner + '\\nDue: ' + $json.follow_up_due_at + '\\nReminder number: ' + (Number($json.reminder_count || 0) + 1) + '\\n\\nUpdate its status in the Data Tables UI when acted on.' }}",
@@ -594,8 +594,8 @@
       ],
       "continueOnFail": true,
       "parameters": {
-        "fromEmail": "replace-with-sender@example.com",
-        "toEmail": "replace-with-internal-email@example.com",
+        "fromEmail": "configure-sender@example.com",
+        "toEmail": "configure-internal-recipient@example.com",
         "subject": "={{ '[Retry ' + (Number($json.initial_notification_attempts || 0) + 1) + '/3] New inquiry ' + $json.inquiry_id + ': ' + $json.subject }}",
         "emailFormat": "text",
         "text": "={{ 'Retrying the initial internal alert for inquiry ' + $json.inquiry_id + '.\\nPriority: ' + $json.priority + '\\nCategory: ' + $json.category + '\\nFrom: ' + $json.full_name + ' <' + $json.email + '>\\n\\nMessage:\\n' + $json.message }}",

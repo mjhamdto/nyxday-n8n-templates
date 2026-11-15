@@ -51,6 +51,18 @@ Essential setup now appears on the imported canvas; repository files remain the 
 
 This audit patch changes only Sticky Notes, layout metadata, documentation, and static compliance tests. It does not alter form mapping, validation, classification, deduplication, Data Table operations, notification routing, retry timing, reminder stages, escalation, or status processing.
 
+## AI review disposition
+
+The tested repository workflow remains authoritative. An AI-generated workflow/annotation export was reviewed but not adopted because it changed functional Form Trigger fields, webhook metadata, node IDs, positions, response text, and other tested implementation details.
+
+| AI review concern | Resolution | Evidence |
+| --- | --- | --- |
+| Generic email values trigger n8n warnings | Replaced with syntactically valid configuration values: configure-sender@example.com, configure-internal-recipient@example.com, and configure-escalation-recipient@example.com. | Workflow, SETUP, CONFIGURATION, and automated SMTP-placeholder test. |
+| Exported credentials/identifiers | No credential IDs, names, or credential objects are present. | Existing secret/private-endpoint test plus raw JSON review. |
+| Canvas clarity and annotations | Retained the tested self-contained notes; refined only setup grouping and critical privacy warning. | Overview, white setup/schema notes, and red Form Trigger warning. |
+| Multiple Data Tables | Rejected as inaccurate. This template uses one customer_inquiries Data Table and 10 nodes that operate on it. | Data Table setup note, SETUP, and workflow locators. |
+| AI-generated workflow replacement | Rejected. | Functional-baseline regression check excludes presentation notes but locks every operational node, parameter, connection, setting, and activation state. |
+
 ## Manual fresh-import and visual verification
 
 1. Import workflow.json into an isolated inactive project.
