@@ -3,3 +3,5 @@ node_modules/
 coverage/
 .env
 n8n-data/
+docs/n8n-sticky-note-guidelines.md
+docs/n8n-template-submission-guidelines.md
