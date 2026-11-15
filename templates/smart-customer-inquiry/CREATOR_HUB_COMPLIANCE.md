@@ -51,6 +51,12 @@ Essential setup now appears on the imported canvas; repository files remain the 
 
 This audit patch changes only Sticky Notes, layout metadata, documentation, and static compliance tests. It does not alter form mapping, validation, classification, deduplication, Data Table operations, notification routing, retry timing, reminder stages, escalation, or status processing.
 
+## Canvas layout audit
+
+The canvas uses white background sections A–K: capture/validate, schedule preparation, duplicate checks, storage/audit, priority routing, initial notifications, scheduled scan, due reminders, reminder outcome, initial-alert retry, and retry outcome. The intake lane runs left-to-right across the top; scheduled processing occupies two rows below it. Configuration, schema, and test notes remain in a separate left reference area, while the red privacy warning sits over the Form Trigger.
+
+Automated layout checks verify every listed functional node anchor is inside its intended section with title clearance, that the A–K rectangles do not overlap, and that every section note remains below 50 words. This is coordinate-based verification only; visual import inspection remains required.
+
 ## AI review disposition
 
 The tested repository workflow remains authoritative. An AI-generated workflow/annotation export was reviewed but not adopted because it changed functional Form Trigger fields, webhook metadata, node IDs, positions, response text, and other tested implementation details.

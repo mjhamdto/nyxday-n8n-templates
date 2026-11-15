@@ -7,8 +7,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -760,
-        -520
+        -1100,
+        -950
       ],
       "parameters": {
         "width": 760,
@@ -19,18 +19,18 @@
     },
     {
       "id": "note-intake",
-      "name": "1 · Inquiry intake",
+      "name": "A · Capture and validate inquiries",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -760,
-        -120
+        0,
+        0
       ],
       "parameters": {
-        "width": 350,
-        "height": 120,
+        "width": 900,
+        "height": 400,
         "color": 0,
-        "content": "## 1 · Start here: inquiry intake\nFor a test, open **Customer inquiry form** and click **Execute step**. Submit the test URL it opens. This upper path then stores and alerts. It is independent from the hourly reminder path below."
+        "content": "## Capture and validate inquiries\nCollects customer inquiries, standardizes submitted fields, validates required information, and assigns a priority using configurable business rules."
       }
     },
     {
@@ -39,8 +39,8 @@
       "type": "n8n-nodes-base.formTrigger",
       "typeVersion": 2.2,
       "position": [
-        -620,
-        80
+        160,
+        180
       ],
       "webhookId": "smart-customer-inquiry",
       "parameters": {
@@ -161,8 +161,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -460,
-        80
+        400,
+        180
       ],
       "parameters": {
         "jsCode": "// Form Trigger 2.2 returns labels; newer versions can return field names.\nconst canonical = (key) => String(key).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');\nconst values = Object.fromEntries(Object.entries($json).map(([key, value]) => [canonical(key), value]));\nconst get = (...keys) => { for (const key of keys) { const value = values[canonical(key)]; if (value !== undefined && value !== null) return value; } return ''; };\nconst consent = Object.entries($json).some(([key, value]) => /consent|acknowledge/i.test(key) && Boolean(value));\nreturn [{json:{full_name:get('full_name','full name','name'),email:get('email','email address'),phone:get('phone','phone number'),company:get('company','company name'),category:get('category','inquiry category'),subject:get('subject'),message:get('message'),preferred_contact_method:get('preferred_contact_method','preferred contact method'),consent}}];"
@@ -170,18 +170,18 @@
     },
     {
       "id": "note-rules",
-      "name": "2 · Validate, classify and deduplicate",
+      "name": "B · Prepare follow-up schedule",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -300,
-        -120
+        1000,
+        0
       ],
       "parameters": {
-        "width": 720,
-        "height": 120,
+        "width": 400,
+        "height": 400,
         "color": 0,
-        "content": "## 2 · Normalize, classify and route\nThe mapping node accepts older label-based and newer custom field-name output. Deterministic rules set priority. Exact duplicate matches update only the returned Data Table row by its native ID. New inquiries pass **Route by priority**; High/Critical can optionally use Slack after explicit setup."
+        "content": "## Prepare follow-up schedule\nCreates the reminder schedule, retry counters, and escalation state used to manage the inquiry after submission."
       }
     },
     {
@@ -190,8 +190,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -300,
-        80
+        640,
+        180
       ],
       "parameters": {
         "jsCode": "// CONFIGURATION: edit plain values here; no credentials belong here.\nconst cfg = { duplicateWindowHours: 24, defaultOwner: 'Unassigned', requireConsent: true, reminderHours: { Critical: 1, High: 4, Normal: 24, Low: 48 } };\nconst asText = (value, max) => typeof value === 'string' ? value.trim().replace(/\\s+/g, ' ').slice(0, max) : '';\nconst raw = $json; const full_name = asText(raw.full_name, 120); const email = asText(raw.email, 254).toLowerCase(); const subject = asText(raw.subject, 200); const message = asText(raw.message, 5000); const consent = raw.consent === true || raw.consent === 'true';\nif (!full_name || !email || !subject || !message) throw new Error('Full name, email, subject, and message are required.');\nif (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/u.test(email)) throw new Error('Enter a valid email address.'); if (cfg.requireConsent && !consent) throw new Error('Please acknowledge the privacy notice before submitting.');\nconst allowed = ['General inquiry','Sales / quotation','Technical support','Existing customer','Partnership','Complaint','Other']; const category = allowed.includes(raw.category) ? raw.category : 'Other'; const text = `${subject} ${message}`.toLowerCase();\nconst urgent = /\\b(urgent|outage|security incident|data loss|legal escalation)\\b/u.test(text); let priority = category === 'Partnership' ? 'Low' : 'Normal'; if ((category === 'Complaint' || category === 'Technical support') && urgent) priority = 'High'; if (category === 'Complaint' && /\\b(data loss|legal escalation)\\b/u.test(text)) priority = 'Critical'; if (category === 'Sales / quotation' && /\\b(urgent|asap)\\b/u.test(text)) priority = 'High';\nconst now = new Date(); const submitted_at = now.toISOString(); const inquiry_id = `INQ-${submitted_at.replace(/\\D/g,'').slice(0,14)}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;\nreturn [{json:{inquiry_id,full_name,email,phone:asText(raw.phone,50),company:asText(raw.company,160),category,subject,message,preferred_contact_method:asText(raw.preferred_contact_method,30),consent,priority,status:'New',assigned_owner:cfg.defaultOwner,source:'n8n-form',submitted_at,last_activity_at:submitted_at,follow_up_due_at:new Date(now.getTime()+cfg.reminderHours[priority]*3600000).toISOString(),reminder_count:0,last_reminder_at:null,notification_state:'pending',processing_state:'stored',error_state:'',duplicate_of:'',dedupe_key:`${email}|${subject.toLowerCase()}|${message.toLowerCase()}`,duplicate_window_start:new Date(now.getTime()-cfg.duplicateWindowHours*3600000).toISOString()}}];"
@@ -203,8 +203,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -80,
-        80
+        1100,
+        180
       ],
       "parameters": {
         "jsCode": "// Elapsed hours after submission, then after each successful stage.\nconst stages = { Critical: [1, 2, 4], High: [4, 8, 24], Normal: [24, 24, 48], Low: [48, 48, 72] };\nconst intervals = stages[$json.priority] ?? stages.Normal;\nconst submitted = Date.parse($json.submitted_at);\nconst firstDue = new Date(submitted + intervals[0] * 3600000).toISOString();\nreturn [{json:{...$json,follow_up_due_at:firstDue,next_reminder_due_at:firstDue,reminder_stage:0,reminder_count:0,reminder_retry_count:0,last_retry_at:null,last_retry_error:'',delivery_failure_state:'none',initial_notification_state:'pending',initial_notification_attempts:0,initial_notification_next_retry_at:null,initial_notification_last_error:'',initial_notification_last_attempt_at:null,escalation_state:'not_escalated',last_notification_outcome:'pending',notification_attempts:0,last_duplicate_at:null,follow_up_intervals_hours:intervals}}];"
@@ -216,8 +216,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        40,
-        20
+        1550,
+        150
       ],
       "parameters": {
         "resource": "row",
@@ -250,8 +250,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        40,
-        160
+        1550,
+        260
       ],
       "parameters": {
         "resource": "row",
@@ -286,8 +286,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        270,
-        -40
+        2260,
+        130
       ],
       "parameters": {
         "jsCode": "const { duplicate_window_start, follow_up_intervals_hours, ...record } = $json;\nreturn [{ json: record }];"
@@ -299,8 +299,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        270,
-        20
+        2480,
+        130
       ],
       "parameters": {
         "resource": "row",
@@ -322,8 +322,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.3,
       "position": [
-        500,
-        20
+        3150,
+        180
       ],
       "parameters": {
         "mode": "expression",
@@ -337,8 +337,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
       "position": [
-        720,
-        -120
+        3370,
+        180
       ],
       "parameters": {
         "conditions": {"combinator":"and","options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":3},"conditions":[{"leftValue":"={{ false }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}]},
@@ -351,8 +351,8 @@
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.5,
       "position": [
-        960,
-        -120
+        3820,
+        130
       ],
       "disabled": true,
       "continueOnFail": true,
@@ -372,8 +372,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        740,
-        20
+        4050,
+        180
       ],
       "continueOnFail": true,
       "parameters": {
@@ -393,8 +393,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        990,
-        20
+        4300,
+        180
       ],
       "parameters": {
         "resource": "row",
@@ -436,8 +436,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        270,
-        160
+        2480,
+        260
       ],
       "parameters": {
         "resource": "row",
@@ -469,18 +469,18 @@
     },
     {
       "id": "note-reminder",
-      "name": "3 · Scheduled reminders",
+      "name": "G · Scan stored inquiries",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -300,
-        400
+        0,
+        600
       ],
       "parameters": {
-        "width": 1060,
-        "height": 120,
+        "width": 1100,
+        "height": 400,
         "color": 0,
-        "content": "## 3 · Scheduled checks and escalation\nEvery 15 minutes, this branch re-reads durable records. It sends due initial-alert retries separately, then evaluates reminders. Initial alerts retry up to 3 times. Reminder stages stay independent: provider acceptance advances `next_reminder_due_at`; failed reminder sends retry hourly without advancing stage."
+        "content": "## Scan stored inquiries\nRuns every 15 minutes to identify inquiries requiring follow-up reminders or retries of failed initial notifications."
       }
     },
     {
@@ -489,8 +489,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -300,
-        610
+        150,
+        790
       ],
       "parameters": {
         "rule": {
@@ -509,8 +509,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        -70,
-        610
+        400,
+        790
       ],
       "parameters": {
         "resource": "row",
@@ -529,8 +529,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        160,
-        610
+        650,
+        790
       ],
       "parameters": {
         "jsCode": "const maxReminders = 3; const maxInitialAttempts = 3; const eligibleStatuses = ['New', 'Acknowledged', 'In progress']; const now = Date.now();\nreturn $input.all().map(({json: r}) => {\n  const reasons = []; const dueAt = r.next_reminder_due_at ?? r.follow_up_due_at; const stage = Number(r.reminder_stage || 0); const initialRetryAt = r.initial_notification_next_retry_at;\n  const initialRetryEligible = r.processing_state === 'stored' && r.initial_notification_state === 'retry_pending' && Number(r.initial_notification_attempts || 0) < maxInitialAttempts && initialRetryAt && !Number.isNaN(Date.parse(initialRetryAt)) && Date.parse(initialRetryAt) <= now;\n  if (!eligibleStatuses.includes(r.status)) reasons.push('status ' + r.status + ' is paused or complete');\n  if (r.processing_state !== 'stored') reasons.push('processing_state is not stored');\n  if (r.initial_notification_state === 'retry_pending') reasons.push('initial notification retry is pending');\n  if (r.delivery_failure_state === 'delivery_failed') reasons.push('terminal delivery retry limit reached');\n  if (Number(r.reminder_count || 0) >= maxReminders) reasons.push('maximum reminder count reached');\n  if (!dueAt || Number.isNaN(Date.parse(dueAt))) reasons.push('next_reminder_due_at is missing or invalid');\n  else if (Date.parse(dueAt) > now) reasons.push('next reminder is not due yet');\n  return { json: { ...r, next_reminder_due_at: dueAt, reminder_action: stage >= 2 ? 'escalation' : 'reminder', reminder_eligible: reasons.length === 0, reminder_skip_reason: reasons.join('; ') || 'eligible now', initial_notification_retry_eligible: Boolean(initialRetryEligible), initial_notification_retry_skip_reason: initialRetryEligible ? 'eligible now' : (r.initial_notification_state === 'retry_pending' ? 'not due, malformed, or maximum initial attempts reached' : 'initial notification retry is not pending'), reminder_checked_at: new Date(now).toISOString() } };\n});"
@@ -542,8 +542,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        400,
-        610
+        1320,
+        790
       ],
       "parameters": {
         "jsCode": "return $input.all().filter(({ json }) => json.reminder_eligible === true);"
@@ -555,8 +555,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        640,
-        610
+        1550,
+        790
       ],
       "continueOnFail": true,
       "parameters": {
@@ -576,8 +576,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        400,
-        780
+        1320,
+        1290
       ],
       "parameters": {
         "jsCode": "return $input.all().filter(({ json }) => json.initial_notification_retry_eligible === true);"
@@ -589,8 +589,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        640,
-        780
+        1550,
+        1290
       ],
       "continueOnFail": true,
       "parameters": {
@@ -610,8 +610,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
       "position": [
-        890,
-        780
+        2050,
+        1290
       ],
       "parameters": {
         "conditions": {
@@ -630,8 +630,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1140,
-        720
+        2350,
+        1230
       ],
       "parameters": {
         "resource": "row",
@@ -648,8 +648,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1140,
-        850
+        2350,
+        1370
       ],
       "parameters": {
         "resource": "row",
@@ -666,8 +666,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.4,
       "position": [
-        890,
-        610
+        2050,
+        790
       ],
       "parameters": {
         "conditions": {
@@ -686,8 +686,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1140,
-        610
+        2350,
+        730
       ],
       "parameters": {
         "resource": "row",
@@ -732,8 +732,8 @@
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1.1,
       "position": [
-        1140,
-        740
+        2350,
+        850
       ],
       "parameters": {
         "resource": "row",
@@ -746,18 +746,18 @@
     },
     {
       "id": "note-failure",
-      "name": "4 · Failure handling",
+      "name": "I · Record reminder outcome",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        820,
-        400
+        1950,
+        600
       ],
       "parameters": {
-        "width": 320,
-        "height": 120,
+        "width": 950,
+        "height": 400,
         "color": 0,
-        "content": "## 4 · Failure handling\nStorage errors remain visible in Executions. Email failures retain the saved record. Reminder failures 1–2 are `retry_pending`; failure 3 is `delivery_failed`. Fix credentials, inspect durable state, then use the safe recovery steps in SETUP."
+        "content": "## Record reminder outcome\nAdvances reminder stages after successful SMTP acceptance or schedules bounded retries after delivery failures."
       }
     },
     {
@@ -766,12 +766,12 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        -760,
-        0
+        80,
+        120
       ],
       "parameters": {
-        "width": 350,
-        "height": 100,
+        "width": 390,
+        "height": 160,
         "color": 5,
         "content": "## Required before public use\nIn **Customer inquiry form**, replace the privacy-notice URL placeholder with this business's public HTTPS notice. Open the test form and click the link before publishing. The acknowledgement is not marketing consent."
       }
@@ -781,7 +781,7 @@
       "name": "5 · SMTP and optional Slack setup",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [500, -310],
+      "position": [200, -520],
       "parameters": {
         "width": 760,
         "height": 100,
@@ -794,7 +794,7 @@
       "name": "6 · Data Table connection",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-760, 350],
+      "position": [-1100, -520],
       "parameters": {
         "width": 350,
         "height": 120,
@@ -807,7 +807,7 @@
       "name": "Schema 1 · Core fields",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-760, 500],
+      "position": [-1100, -380],
       "parameters": {
         "width": 350,
         "height": 130,
@@ -820,7 +820,7 @@
       "name": "Schema 2 · Date fields",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-760, 650],
+      "position": [-1100, -230],
       "parameters": {
         "width": 350,
         "height": 145,
@@ -833,7 +833,7 @@
       "name": "Schema 3 · Number fields",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-760, 815],
+      "position": [-1100, -65],
       "parameters": {
         "width": 350,
         "height": 100,
@@ -846,7 +846,7 @@
       "name": "Schema 4 · State fields",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-760, 935],
+      "position": [-1100, 55],
       "parameters": {
         "width": 350,
         "height": 130,
@@ -859,12 +859,103 @@
       "name": "7 · Test and activate",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [400, 1010],
+      "position": [-700, -520],
       "parameters": {
         "width": 850,
         "height": 110,
         "color": 0,
         "content": "## 7 · Test before activation\nKeep inactive. Run the Form test URL with synthetic data; confirm one row and internal email. Re-submit it to confirm duplicate suppression. Set next_reminder_due_at in the past to test a reminder; confirm Resolved/Closed skip. Review priority/retry settings in CONFIG HERE nodes, then publish."
+      }
+    },
+    {
+      "id": "note-duplicates",
+      "name": "C · Check for duplicates",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1450, 0],
+      "parameters": {
+        "width": 600,
+        "height": 400,
+        "color": 0,
+        "content": "## Check for duplicates\nChecks whether an equivalent inquiry already exists within the configured duplicate-detection window."
+      }
+    },
+    {
+      "id": "note-store-audit",
+      "name": "D · Store or audit inquiries",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2150, 0],
+      "parameters": {
+        "width": 780,
+        "height": 400,
+        "color": 0,
+        "content": "## Store or audit inquiries\nStores new inquiries while recording duplicate activity without generating another internal notification."
+      }
+    },
+    {
+      "id": "note-priority-route",
+      "name": "E · Route inquiries by priority",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3050, 0],
+      "parameters": {
+        "width": 550,
+        "height": 400,
+        "color": 0,
+        "content": "## Route inquiries by priority\nRoutes inquiries according to their assigned priority and determines whether optional Slack alerts should run."
+      }
+    },
+    {
+      "id": "note-initial-notifications",
+      "name": "F · Send internal notifications",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [3700, 0],
+      "parameters": {
+        "width": 1000,
+        "height": 400,
+        "color": 0,
+        "content": "## Send internal notifications\nNotifies the internal team about new inquiries and records whether the email provider accepted the notification."
+      }
+    },
+    {
+      "id": "note-due-reminders",
+      "name": "H · Send due reminders",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1200, 600],
+      "parameters": {
+        "width": 650,
+        "height": 400,
+        "color": 0,
+        "content": "## Send due reminders\nSelects inquiries with outstanding follow-up actions and sends scheduled internal reminders."
+      }
+    },
+    {
+      "id": "note-retry-initial",
+      "name": "J · Retry initial alerts",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1200, 1100],
+      "parameters": {
+        "width": 650,
+        "height": 400,
+        "color": 0,
+        "content": "## Retry initial alerts\nRetries failed initial notifications according to the configured retry interval and maximum attempt limit."
+      }
+    },
+    {
+      "id": "note-retry-outcome",
+      "name": "K · Record retry outcome",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1950, 1100],
+      "parameters": {
+        "width": 950,
+        "height": 400,
+        "color": 0,
+        "content": "## Record retry outcome\nRecords successful retry attempts or terminal failures when the maximum number of attempts is reached."
       }
     }
   ],
