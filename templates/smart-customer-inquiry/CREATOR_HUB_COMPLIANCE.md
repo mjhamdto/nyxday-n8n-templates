@@ -1,49 +1,66 @@
-# Creator Hub compliance review — v1.1.2
+# Creator Hub compliance audit — v1.1.2
 
-Reviewed: 2026-11-15. This is a submission-readiness record, not n8n approval.
+Reviewed: 2026-11-15. This audit records submission readiness; it is not n8n approval.
 
-## Source availability
+## Guideline sources and scope
 
-The two requested Notion sources could not be independently retrieved on the review date: the template-guideline URL returned HTTP 400 and the sticky-note URL returned HTTP 404. Requirements attributed exclusively to those sources are therefore marked **SOURCE NOT VERIFIED**. The official Form Trigger documentation was available and is linked where used.
+Primary references were read in full from the repository:
 
-| Requirement | Source | Status | Evidence | Required action |
+- docs/n8n-template-submission-guidelines.md — local copy; source URL/revision date aren't recorded in that file. The supplied historical source URL is https://n8n.notion.site/Template-submission-guidelines-9959894476734da3b402c90b124b1f77.
+- docs/n8n-sticky-note-guidelines.md — local copy; source URL/revision date aren't recorded in that file. The supplied historical source URL is https://n8n.notion.site/Add-sticky-notes-to-templates-2aa5b6e0c94f8058b0aefddd02655887.
+
+Both local copies are treated as authoritative for this review. Their unrecorded revision dates are an ambiguity, not a failure. “Mandatory” below means an explicit guideline instruction; “recommended” means wording such as consider, where practical, or optional.
+
+## Requirement inventory
+
+| Requirement | Official source section | Implementation evidence | Status | Remaining action |
 | --- | --- | --- | --- | --- |
-| Importable workflow with supported built-in nodes | Internal NyxDay quality standard | PASS | JSON, Code-node syntax, node references, and connections are checked by \`npm test\`. | Import in an isolated n8n environment before submission. |
-| No exported credentials, secrets, private endpoints, or customer data | Internal NyxDay quality standard | PASS | Automated exported-workflow checks pass; credentials are attached only by the importer. | Recheck the final upload artifact. |
-| Clear overview note, top-left, yellow | Requested Notion sticky-note guidance — unavailable | SOURCE NOT VERIFIED | \`Read me — overview and setup\` is colour 2 at \`[-760,-520]\`, has How it works and Setup, and is bounded by tests to 100–300 words. | Visually inspect after fresh import and reconcile with restored official guidance. |
-| Concise white section notes | Requested Notion sticky-note guidance — unavailable | SOURCE NOT VERIFIED | Four explanatory section notes use colour 0; tests enforce no more than 50 words each. | Verify colour/word-limit expectations against the restored source. |
-| Red note used only for a critical warning | Internal NyxDay quality standard | PASS | General failure note is colour 0. The only red note, \`Required before publishing\`, identifies incomplete configuration that makes public activation unsafe. | Visually inspect placement after import. |
-| Privacy notice is visible and clickable | [Form Trigger documentation](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.formtrigger) | NEEDS MANUAL REVIEW | Form Description contains an \`https://REPLACE_WITH_YOUR_PRIVACY_NOTICE_URL\` anchor. n8n documents \`a\`, \`href\`, \`target\`, and \`rel\` as supported, with HTTP(S)-only URLs. | Replace placeholder with a real public URL and click-test in the importing instance. |
-| Form error behavior is not misleading | [Form Trigger documentation](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.formtrigger) | NEEDS MANUAL REVIEW | Workflow uses response-after-workflow behavior; n8n documents an error response when the workflow errors. SMTP failure is intentionally a stored/retryable internal outcome. | Test validation, Data Table failure, and SMTP failure using synthetic data. |
-| Required importing setup is documented | Internal NyxDay quality standard | PASS | SETUP documents table types, IDs, SMTP, recipients, timezone, privacy URL, Slack, and tests. | Follow the clean-import checklist without relying on existing instance configuration. |
-| Optional Slack cannot block default flow | Internal NyxDay quality standard | PASS | Slack node is disabled; gating condition is false; SMTP continues after Slack. | Runtime-test only if test credentials are available. |
-| Template schedule is publishable and timezone-aware | [Schedule Trigger documentation](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.scheduletrigger) | NEEDS MANUAL REVIEW | Workflow uses a 15-minute Schedule Trigger and workflow timezone. n8n requires publication for scheduled execution. | Confirm timezone and schedule after import/publish in isolated testing. |
-| Fresh-import acceptance | Internal NyxDay quality standard | NEEDS MANUAL REVIEW | A reproducible checklist is in TESTING.md. | Perform the checklist against a new isolated workflow/Data Table/SMTP setup. |
-| Creator Hub title, description, tags, and submission fields | Requested template-guideline source — unavailable | SOURCE NOT VERIFIED | publication.md contains a proposed title, description, categories, tags, credential and cost information. | Compare portal fields and generated text to current Creator Hub requirements before submission. |
+| **Mandatory:** solve a specific practical problem with substantive reusable logic | Submission: Solve a useful problem | Inquiry intake, validation, deduplication, durable tracking, routing, retry, reminder, and escalation form a complete small-business queue. README identifies audience/outcome. | PASS | None. |
+| **Mandatory:** review AI-assisted content and test its claims before submission | Submission: Review AI-assisted submissions | Static checks cover JSON/nodes/logic; runtime checklist covers every branch. | NEEDS MANUAL VALIDATION | Run clean-import acceptance using the exact final JSON. |
+| **Mandatory:** original work / respect licenses | Submission: Submit original work | NyxDay-authored MIT repository; no third-party workflow or asset is included. | NEEDS MANUAL VALIDATION | Submitter confirms provenance and authority to publish. |
+| **Mandatory:** descriptive node names and understandable execution path | Submission: Make the workflow understandable | Operational nodes use purpose names; intake and scheduled processing are separated left-to-right. | PASS | Visual import check remains prudent. |
+| **Mandatory:** one overview and section notes for workflows with 4+ nodes | Submission: Make understandable; Sticky: overview and sections | One overview plus eleven concise white grouping/setup notes are exported. | PASS | Verify rendered canvas after import. |
+| **Mandatory:** yellow overview at top-left, 100–300 words, How it works + Setup headings | Sticky: Add the main overview note | Colour 2, position [-760,-520], 169 words; automated test verifies position, colour, headings, and word range. | PASS | None. |
+| **Recommended:** overview Customization heading | Sticky: Add the main overview note | Essential customization is in Setup and nearby notes; no separate Customization heading is needed. | NOT APPLICABLE | None. |
+| **Mandatory:** white section notes, under 50 words, explain groups | Sticky: Group nodes with section notes | All explanatory/setup notes use colour 0 and automated tests enforce fewer than 50 words. | PASS | Verify visual grouping after import. |
+| **Mandatory:** red warning only for one critical setup/risk and placed over its node | Sticky: Highlight a critical setup step | One red note sits over Customer inquiry form and warns only about the privacy URL before public use. | PASS | Verify no overlap problem after import. |
+| **Mandatory:** document credentials, resources, dependencies, configuration, limitations | Submission: Make understandable | Main/section notes and SETUP name table, SMTP, Slack, privacy, timezone, retries, status, and limitations. No sub-workflows/community nodes. | PASS | None. |
+| **Mandatory:** remove credentials, private IDs, customer data, pinned data | Submission: Remove secrets and personal data | Tests reject credentials/secrets/private endpoints; workflow has empty pinData and generic placeholders. | PASS | Re-run tests against the exact upload artifact. |
+| **Mandatory:** fresh-import exact JSON, configure from instructions, test branches/failures/repeats, confirm notes | Submission: Test template before submitting | TESTING and in-canvas note provide a synthetic, clean-import acceptance path. | NEEDS MANUAL VALIDATION | Perform it in an isolated n8n project. |
+| **Mandatory:** state tested release/version-specific restrictions accurately | Submission: Test template before submitting | Setup states n8n 2.45.0+ and reports prior operator import on 2.46.7; v1.1.2 runtime validation is clearly pending. | PASS | Record the exact v1.1.2 runtime version/date after test. |
+| **Mandatory:** no undocumented local files, pinned data, community nodes, or hidden dependencies | Submission: Test template before submitting; Community nodes | Only built-in nodes; no filesystem node, community node, sub-workflow, or pin data. | PASS | None. |
+| **Mandatory:** complete submission metadata and review portal content | Submission checklist | publication.md supplies title, description, integrations, credentials, cost, tags, categories, license, audience, and repository placeholder. | NEEDS MANUAL VALIDATION | Compare to current portal fields and replace repository URL before submission. |
+| **Recommended:** walkthrough video for complex/beginner workflow | Sticky: Add a walkthrough video | Written instructions are complete; no video is required. | NOT APPLICABLE | Optional future enhancement. |
+
+## Self-contained setup coverage
+
+Essential setup now appears on the imported canvas; repository files remain the detailed reference.
+
+| Setup instruction | In-workflow location | Detail retained in |
+| --- | --- | --- |
+| n8n 2.45+, built-in nodes, required Data Table/SMTP, optional Slack | Overview + 5 · SMTP and optional Slack | SETUP Quick start requirements |
+| Table name, ID discovery, all 10 Data Table replacements | 6 · Data Table connection | SETUP Mandatory setup |
+| Every required column and exact type | Schema 1–4 notes | SETUP Table schema |
+| SMTP credential and all three email nodes/recipients | 5 · SMTP and optional Slack | SETUP Mandatory setup |
+| Privacy URL, click test, non-marketing acknowledgement | Red Required before public use note + overview | SETUP/CONFIGURATION |
+| Timezone, priority rules, duplicate window, reminders/retries | Overview + 7 · Test before activation | CONFIGURATION |
+| Slack activation | 5 · SMTP and optional Slack | SETUP Optional Slack alerts |
+| Synthetic intake, record/email, duplicate, reminder, status-stop test, activation | 7 · Test before activation | TESTING |
 
 ## Functional-change guard
 
-This compliance patch intentionally changes only:
+This audit patch changes only Sticky Notes, layout metadata, documentation, and static compliance tests. It does not alter form mapping, validation, classification, deduplication, Data Table operations, notification routing, retry timing, reminder stages, escalation, or status processing.
 
-- Sticky Note content, colours, and one warning note.
-- Privacy placeholder scheme so the documented Form Trigger sanitizer permits the anchor.
-- Documentation, compliance record, and static checks.
+## Manual fresh-import and visual verification
 
-It does not change inquiry validation, classification, duplicate detection, Data Table operations, notification/retry schedules, routing, or escalation behavior.
+1. Import workflow.json into an isolated inactive project.
+2. Follow only the canvas notes: create customer_inquiries with Schema 1–4, replace all Data Table IDs, attach test SMTP to all three email nodes, replace recipients and privacy host/path.
+3. Open the Form Trigger test URL. Confirm notes are readable, no note hides an operational node, and the privacy link opens.
+4. Submit synthetic data; verify one stored record and internal email. Re-submit exactly to verify suppression.
+5. Set next_reminder_due_at in the past to test a reminder; confirm Resolved and Closed skip.
+6. Test initial-alert retry success and terminal failure, reminder failure recovery, and escalation with test-only recipients.
+7. Recheck the exported JSON, portal metadata, and template preview immediately before submission.
 
-## Fresh-import acceptance checklist
+## Final readiness decision
 
-1. Import \`workflow.json\` into an isolated project as a new inactive workflow.
-2. Create the Data Table using SETUP.md, including all initial-notification fields.
-3. Replace every Data Table ID and privacy placeholder; attach test SMTP credentials to all three email nodes.
-4. Configure test sender/ordinary/escalation recipients and workflow timezone.
-5. Open the Form Trigger test URL. Confirm the privacy link is clickable, acknowledgement is required, and no marketing consent is requested.
-6. Submit a synthetic inquiry; verify one row and one internal alert.
-7. Re-submit the exact payload; verify duplicate suppression and no second alert.
-8. Test an initial SMTP failure, retry success, and terminal third failure.
-9. Test a due reminder, Waiting for customer, Resolved, Closed, and stage-three escalation.
-10. Confirm the canvas notes remain readable after import. Activate only after all checks pass.
-
-## Readiness decision
-
-**READY AFTER MANUAL CHECKS.** The exported package passes static validation and is documented for import. Submission remains conditional on a clean isolated import, rendered privacy-link verification, and reconciliation against the currently inaccessible official Notion submission/sticky-note guidance.
+**READY AFTER MANUAL CHECKS.** All static and canvas-content requirements from the supplied local guidelines are addressed. Remaining blockers are the guideline-required clean import/runtime branch test, imported-canvas visual inspection, privacy-link click test after a real URL is inserted, provenance confirmation, and portal metadata review.

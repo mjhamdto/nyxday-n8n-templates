@@ -14,7 +14,7 @@
         "width": 760,
         "height": 300,
         "color": 2,
-        "content": "## Smart Customer Inquiry & Follow-Up Manager v1.1.2\n\n### How it works\nThis workflow captures a customer inquiry with an n8n Form, normalizes and validates it, applies transparent priority rules, and suppresses exact duplicates before storing a durable Data Table record. A visible Switch sends the internal SMTP alert; Slack is optional, disabled by default, and only available for High/Critical items after explicit setup. The 15-minute scheduled branch re-reads saved state, retries failed initial alerts independently, then sends due reminders or escalation. Waiting for customer pauses follow-up; Resolved and Closed stop it.\n\n### Setup\n1. Create the typed table in SETUP.md.\n2. Replace every `REPLACE_WITH_DATA_TABLE_ID`.\n3. Attach SMTP credentials to all three email nodes; replace sender, ordinary, and escalation recipients.\n4. Replace the privacy URL placeholder, set workflow timezone, and review priority/follow-up settings.\n5. Leave Slack disabled unless deliberately configured.\n6. Test the Form Trigger URL, stored row, alert, duplicate, and reminder before publishing.\n\nSee SETUP.md for recovery and testing details. Never use this workflow for customer marketing email."
+        "content": "## Smart Customer Inquiry & Follow-Up Manager v1.1.2\n\n### How it works\nThis workflow captures a customer inquiry with an n8n Form, normalizes and validates it, applies transparent priority rules, and suppresses exact duplicates before storing a durable Data Table record. A visible Switch sends the internal SMTP alert; Slack is optional, disabled by default, and only available for High/Critical items after explicit setup. The 15-minute scheduled branch re-reads saved state, retries failed initial alerts independently, then sends due reminders or escalation. Waiting for customer pauses follow-up; Resolved and Closed stop it.\n\n### Setup\n1. Use n8n 2.45+ with built-in Form, Data Table, Schedule, Code, Switch, If, and Send Email nodes.\n2. Create the typed table in Schema 1–4, then replace every `REPLACE_WITH_DATA_TABLE_ID`.\n3. Attach SMTP credentials to all three email nodes; replace sender, ordinary, and escalation recipients.\n4. Replace the privacy URL placeholder, set workflow timezone, and review priority/follow-up settings.\n5. Leave Slack disabled unless deliberately configured.\n6. Test the Form Trigger URL, stored row, alert, duplicate, and reminder before publishing.\n\nSee SETUP.md for recovery and testing details. Never use this workflow for customer marketing email."
       }
     },
     {
@@ -766,14 +766,105 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        20,
-        -520
+        -760,
+        0
       ],
       "parameters": {
-        "width": 330,
-        "height": 170,
+        "width": 350,
+        "height": 100,
         "color": 5,
-        "content": "## Required before publishing\nReplace every Data Table ID, SMTP sender/recipients, and the privacy-notice URL placeholder. Attach SMTP credentials to all three email nodes. Test with synthetic data first. Do not activate this exported template unchanged."
+        "content": "## Required before public use\nIn **Customer inquiry form**, replace the privacy-notice URL placeholder with this business's public HTTPS notice. Open the test form and click the link before publishing. The acknowledgement is not marketing consent."
+      }
+    },
+    {
+      "id": "note-smtp-setup",
+      "name": "5 · SMTP and optional Slack setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [500, -310],
+      "parameters": {
+        "width": 760,
+        "height": 100,
+        "color": 0,
+        "content": "## 5 · SMTP and optional Slack\nAttach one SMTP credential to Send internal new-inquiry alert, Send internal follow-up reminder, and Retry internal new-inquiry alert. Replace sender, ordinary, and escalation addresses. Slack is optional: configure its credential/channel, enable its node, and change its gate from false to true."
+      }
+    },
+    {
+      "id": "note-table-setup",
+      "name": "6 · Data Table connection",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-760, 350],
+      "parameters": {
+        "width": 350,
+        "height": 120,
+        "color": 0,
+        "content": "## 6 · Data Table connection\nCreate customer_inquiries in this project. Copy its ID from the Data Tables UI/URL and replace REPLACE_WITH_DATA_TABLE_ID in all 10 Data Table nodes. Use the exact typed columns in Schema 1–4 below; optional Date cells must allow null."
+      }
+    },
+    {
+      "id": "note-schema-core",
+      "name": "Schema 1 · Core fields",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-760, 500],
+      "parameters": {
+        "width": 350,
+        "height": 130,
+        "color": 0,
+        "content": "## Schema 1 · Core fields\nBoolean: consent. String: inquiry_id, full_name, email, phone, company, category, subject, message, preferred_contact_method, priority, status, assigned_owner, source, duplicate_of, dedupe_key. Do not add duplicate_window_start; it is a temporary query value."
+      }
+    },
+    {
+      "id": "note-schema-dates",
+      "name": "Schema 2 · Date fields",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-760, 650],
+      "parameters": {
+        "width": 350,
+        "height": 145,
+        "color": 0,
+        "content": "## Schema 2 · Date fields\nDate: submitted_at, last_activity_at, last_reminder_at, last_duplicate_at, last_retry_at, resolution_at, initial_notification_last_attempt_at, follow_up_due_at, next_reminder_due_at, initial_notification_next_retry_at. Optional dates start null; do not enter an empty string."
+      }
+    },
+    {
+      "id": "note-schema-counts",
+      "name": "Schema 3 · Number fields",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-760, 815],
+      "parameters": {
+        "width": 350,
+        "height": 100,
+        "color": 0,
+        "content": "## Schema 3 · Number fields\nNumber: reminder_count, reminder_stage, notification_attempts, reminder_retry_count, initial_notification_attempts. New records start at zero. Initial attempts include the original alert; reminder retry count tracks only failed reminder delivery."
+      }
+    },
+    {
+      "id": "note-schema-state",
+      "name": "Schema 4 · State fields",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-760, 935],
+      "parameters": {
+        "width": 350,
+        "height": 130,
+        "color": 0,
+        "content": "## Schema 4 · State fields\nString: notification_state, last_notification_outcome, processing_state, error_state, escalation_state, delivery_failure_state, last_retry_error, initial_notification_state, initial_notification_last_error. Initial states: pending, retry_pending, provider_accepted, initial_notification_failed."
+      }
+    },
+    {
+      "id": "note-test-activate",
+      "name": "7 · Test and activate",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [400, 1010],
+      "parameters": {
+        "width": 850,
+        "height": 110,
+        "color": 0,
+        "content": "## 7 · Test before activation\nKeep inactive. Run the Form test URL with synthetic data; confirm one row and internal email. Re-submit it to confirm duplicate suppression. Set next_reminder_due_at in the past to test a reminder; confirm Resolved/Closed skip. Review priority/retry settings in CONFIG HERE nodes, then publish."
       }
     }
   ],

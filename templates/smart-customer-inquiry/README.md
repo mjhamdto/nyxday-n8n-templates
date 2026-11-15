@@ -37,6 +37,8 @@ The Form Trigger confirmation is returned only when the execution reaches its fi
 
 Follow [SETUP.md](SETUP.md), then see [CONFIGURATION.md](CONFIGURATION.md), [TESTING.md](TESTING.md), and the [publication package](publication.md). The exported workflow contains no credentials, live URLs, or customer data.
 
+The imported canvas is also self-guiding: its overview, SMTP, Data Table schema, privacy, and test notes contain the essential setup steps. The Markdown files remain the detailed operational reference.
+
 ## Maintainer and license
 
 NyxDay Inc. — [nyxday.com](https://nyxday.com). Released under [MIT](../../LICENSE).
