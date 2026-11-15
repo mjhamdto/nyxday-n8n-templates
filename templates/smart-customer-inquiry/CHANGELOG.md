@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.2 — Initial-alert reliability and privacy patch
+
+- Added a separate, bounded initial-notification retry lane using the existing scheduler: three total SMTP attempts at 15-minute intervals, with terminal `initial_notification_failed` state.
+- Kept initial-alert retries independent of reminder count, reminder stage, escalation, and duplicate-inquiry handling.
+- Added visible privacy-notice URL placeholder and acknowledgement wording that explicitly excludes marketing consent.
+- Updated the overview/version references, typed schema, setup, runtime acceptance checklist, publication metadata, and automated validation.
+
 ## v1.1.1 — Final quality patch
 
 - Removed the duplicate raw `toEmail` key from the follow-up SMTP node and added a raw-JSON duplicate-key test that runs before normal JSON parsing.

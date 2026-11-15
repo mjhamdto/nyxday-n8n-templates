@@ -14,7 +14,7 @@
         "width": 760,
         "height": 300,
         "color": 2,
-        "content": "## Smart Customer Inquiry & Follow-Up Manager v1.1\n### How it works\nA public Form captures an inquiry. The workflow normalizes it, classifies priority, finds exact duplicate records, stores only new rows, then routes Critical/High/Normal/Low through a visible Switch before internal SMTP. Slack is optional and disabled. The hourly branch explains every row's reminder eligibility, then records staged reminder or escalation state.\n\n### Setup\nCreate the typed Data Table schema in SETUP.md, replace `REPLACE_WITH_DATA_TABLE_ID` in all Data Table nodes, configure SMTP sender/recipients, and set the workflow timezone. Test the Form Trigger URL before publishing.\n\n### Customization tips\nThe workflow never sends customer marketing email. Change status in Data Tables; Waiting for customer pauses reminders, while Resolved and Closed stop them. Add rate limiting/WAF outside n8n for public forms."
+        "content": "## Smart Customer Inquiry & Follow-Up Manager v1.1.2\n### How it works\nA public Form captures an inquiry. The workflow normalizes it, classifies priority, finds exact duplicate records, stores only new rows, then routes Critical/High/Normal/Low through a visible Switch before internal SMTP. Slack is optional and disabled. The hourly branch processes initial-alert retries separately from staged reminder/escalation state.\n\n### Setup\nCreate the typed Data Table schema in SETUP.md, replace `REPLACE_WITH_DATA_TABLE_ID` in all Data Table nodes, configure SMTP sender/recipients, privacy URL, and workflow timezone. Test the Form Trigger URL before publishing.\n\n### Customization tips\nThe workflow never sends customer marketing email. Change status in Data Tables; Waiting for customer pauses reminders, while Resolved and Closed stop them. Add rate limiting/WAF outside n8n for public forms."
       }
     },
     {
@@ -45,7 +45,7 @@
       "webhookId": "smart-customer-inquiry",
       "parameters": {
         "formTitle": "Contact us",
-        "formDescription": "Tell us how we can help. We use this information only to respond to your inquiry.",
+        "formDescription": "Tell us how we can help. We use this information only to respond to your inquiry; this acknowledgement is not marketing consent. Read this business's <a href=\"REPLACE_WITH_YOUR_PRIVACY_NOTICE_URL\" target=\"_blank\" rel=\"noopener noreferrer\">privacy notice</a> before submitting. Replace the placeholder with a public HTTPS URL before publishing.",
         "formFields": {
           "values": [
             {
@@ -207,7 +207,7 @@
         80
       ],
       "parameters": {
-        "jsCode": "// Elapsed hours after submission, then after each successful stage.\nconst stages = { Critical: [1, 2, 4], High: [4, 8, 24], Normal: [24, 24, 48], Low: [48, 48, 72] };\nconst intervals = stages[$json.priority] ?? stages.Normal;\nconst submitted = Date.parse($json.submitted_at);\nconst firstDue = new Date(submitted + intervals[0] * 3600000).toISOString();\nreturn [{json:{...$json,follow_up_due_at:firstDue,next_reminder_due_at:firstDue,reminder_stage:0,reminder_count:0,reminder_retry_count:0,last_retry_at:null,last_retry_error:'',delivery_failure_state:'none',escalation_state:'not_escalated',last_notification_outcome:'pending',notification_attempts:0,last_duplicate_at:null,follow_up_intervals_hours:intervals}}];"
+        "jsCode": "// Elapsed hours after submission, then after each successful stage.\nconst stages = { Critical: [1, 2, 4], High: [4, 8, 24], Normal: [24, 24, 48], Low: [48, 48, 72] };\nconst intervals = stages[$json.priority] ?? stages.Normal;\nconst submitted = Date.parse($json.submitted_at);\nconst firstDue = new Date(submitted + intervals[0] * 3600000).toISOString();\nreturn [{json:{...$json,follow_up_due_at:firstDue,next_reminder_due_at:firstDue,reminder_stage:0,reminder_count:0,reminder_retry_count:0,last_retry_at:null,last_retry_error:'',delivery_failure_state:'none',initial_notification_state:'pending',initial_notification_attempts:0,initial_notification_next_retry_at:null,initial_notification_last_error:'',initial_notification_last_attempt_at:null,escalation_state:'not_escalated',last_notification_outcome:'pending',notification_attempts:0,last_duplicate_at:null,follow_up_intervals_hours:intervals}}];"
       }
     },
     {
@@ -418,6 +418,11 @@
           "mappingMode": "defineBelow",
           "value": {
             "notification_state": "={{ $json.error ? 'failed' : 'provider_accepted' }}",
+            "initial_notification_state": "={{ $json.error ? 'retry_pending' : 'provider_accepted' }}",
+            "initial_notification_attempts": 1,
+            "initial_notification_next_retry_at": "={{ $json.error ? new Date(Date.now() + 15 * 60000).toISOString() : null }}",
+            "initial_notification_last_error": "={{ $json.error ? String($json.error?.message ?? $json.error).slice(0, 500) : '' }}",
+            "initial_notification_last_attempt_at": "={{ $now.toISO() }}",
             "last_notification_outcome": "={{ $json.error ? 'failed' : 'provider_accepted' }}",
             "notification_attempts": "={{ Number($('Store new inquiry').item.json.notification_attempts || 0) + 1 }}",
             "last_activity_at": "={{ $now.toISO() }}"
@@ -475,12 +480,12 @@
         "width": 1060,
         "height": 120,
         "color": 0,
-        "content": "## 3 · Scheduled reminders and escalation\nThis lower path runs hourly after publication. **Explain reminder eligibility** exposes an eligibility decision and reason for every row. New/Acknowledged/In progress can continue; Waiting for customer pauses; Resolved/Closed stop. Successful SMTP acceptance advances `next_reminder_due_at` from acceptance time. A failed send records `retry_pending` for a one-hour retry without advancing stage; after 3 failed attempts it becomes `delivery_failed` and stops automatically."
+        "content": "## 3 · Scheduled checks, retries and escalation\nThis lower path runs every 15 minutes after publication. It re-reads durable records, sends due initial-alert retries separately, then evaluates reminders. Initial alerts retry at 15-minute intervals up to 3 total attempts. Reminder stages remain independent: successful SMTP acceptance advances `next_reminder_due_at`; failed reminder sends retry hourly without advancing stage."
       }
     },
     {
       "id": "schedule",
-      "name": "Hourly follow-up check",
+      "name": "Scheduled inquiry check (every 15 min)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -491,9 +496,8 @@
         "rule": {
           "interval": [
             {
-              "field": "hours",
-              "hoursInterval": 1,
-              "triggerAtMinute": 0
+              "field": "minutes",
+              "minutesInterval": 15
             }
           ]
         }
@@ -529,7 +533,7 @@
         610
       ],
       "parameters": {
-        "jsCode": "const maxReminders = 3; const eligibleStatuses = ['New', 'Acknowledged', 'In progress']; const now = Date.now();\nreturn $input.all().map(({json: r}) => {\n  const reasons = []; const dueAt = r.next_reminder_due_at ?? r.follow_up_due_at; const stage = Number(r.reminder_stage || 0);\n  if (!eligibleStatuses.includes(r.status)) reasons.push('status ' + r.status + ' is paused or complete');\n  if (r.processing_state !== 'stored') reasons.push('processing_state is not stored');\n  if (r.delivery_failure_state === 'delivery_failed') reasons.push('terminal delivery retry limit reached');\n  if (Number(r.reminder_count || 0) >= maxReminders) reasons.push('maximum reminder count reached');\n  if (!dueAt || Number.isNaN(Date.parse(dueAt))) reasons.push('next_reminder_due_at is missing or invalid');\n  else if (Date.parse(dueAt) > now) reasons.push('next reminder is not due yet');\n  return { json: { ...r, next_reminder_due_at: dueAt, reminder_action: stage >= 2 ? 'escalation' : 'reminder', reminder_eligible: reasons.length === 0, reminder_skip_reason: reasons.join('; ') || 'eligible now', reminder_checked_at: new Date(now).toISOString() } };\n});"
+        "jsCode": "const maxReminders = 3; const maxInitialAttempts = 3; const eligibleStatuses = ['New', 'Acknowledged', 'In progress']; const now = Date.now();\nreturn $input.all().map(({json: r}) => {\n  const reasons = []; const dueAt = r.next_reminder_due_at ?? r.follow_up_due_at; const stage = Number(r.reminder_stage || 0); const initialRetryAt = r.initial_notification_next_retry_at;\n  const initialRetryEligible = r.processing_state === 'stored' && r.initial_notification_state === 'retry_pending' && Number(r.initial_notification_attempts || 0) < maxInitialAttempts && initialRetryAt && !Number.isNaN(Date.parse(initialRetryAt)) && Date.parse(initialRetryAt) <= now;\n  if (!eligibleStatuses.includes(r.status)) reasons.push('status ' + r.status + ' is paused or complete');\n  if (r.processing_state !== 'stored') reasons.push('processing_state is not stored');\n  if (r.initial_notification_state === 'retry_pending') reasons.push('initial notification retry is pending');\n  if (r.delivery_failure_state === 'delivery_failed') reasons.push('terminal delivery retry limit reached');\n  if (Number(r.reminder_count || 0) >= maxReminders) reasons.push('maximum reminder count reached');\n  if (!dueAt || Number.isNaN(Date.parse(dueAt))) reasons.push('next_reminder_due_at is missing or invalid');\n  else if (Date.parse(dueAt) > now) reasons.push('next reminder is not due yet');\n  return { json: { ...r, next_reminder_due_at: dueAt, reminder_action: stage >= 2 ? 'escalation' : 'reminder', reminder_eligible: reasons.length === 0, reminder_skip_reason: reasons.join('; ') || 'eligible now', initial_notification_retry_eligible: Boolean(initialRetryEligible), initial_notification_retry_skip_reason: initialRetryEligible ? 'eligible now' : (r.initial_notification_state === 'retry_pending' ? 'not due, malformed, or maximum initial attempts reached' : 'initial notification retry is not pending'), reminder_checked_at: new Date(now).toISOString() } };\n});"
       }
     },
     {
@@ -564,6 +568,96 @@
         "options": {
           "appendAttribution": false
         }
+      }
+    },
+    {
+      "id": "initial-retry-eligible",
+      "name": "Send only eligible initial-alert retries",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        780
+      ],
+      "parameters": {
+        "jsCode": "return $input.all().filter(({ json }) => json.initial_notification_retry_eligible === true);"
+      }
+    },
+    {
+      "id": "initial-retry-email",
+      "name": "Retry internal new-inquiry alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        640,
+        780
+      ],
+      "continueOnFail": true,
+      "parameters": {
+        "fromEmail": "replace-with-sender@example.com",
+        "toEmail": "replace-with-internal-email@example.com",
+        "subject": "={{ '[Retry ' + (Number($json.initial_notification_attempts || 0) + 1) + '/3] New inquiry ' + $json.inquiry_id + ': ' + $json.subject }}",
+        "emailFormat": "text",
+        "text": "={{ 'Retrying the initial internal alert for inquiry ' + $json.inquiry_id + '.\\nPriority: ' + $json.priority + '\\nCategory: ' + $json.category + '\\nFrom: ' + $json.full_name + ' <' + $json.email + '>\\n\\nMessage:\\n' + $json.message }}",
+        "options": {
+          "appendAttribution": false
+        }
+      }
+    },
+    {
+      "id": "initial-retry-ok",
+      "name": "Initial-alert retry succeeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        890,
+        780
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3},
+          "conditions": [
+            {"leftValue":"={{ Boolean($json.error) }}","rightValue":false,"operator":{"type":"boolean","operation":"false","singleValue":true}}
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "record-initial-retry-success",
+      "name": "Record initial-alert retry accepted",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1140,
+        720
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {"__rl":true,"value":"REPLACE_WITH_DATA_TABLE_ID","mode":"id"},
+        "matchType": "allConditions",
+        "filters": {"conditions":[{"keyName":"inquiry_id","condition":"eq","keyValue":"={{ $('Send only eligible initial-alert retries').item.json.inquiry_id }}"}]},
+        "columns": {"mappingMode":"defineBelow","value":{"initial_notification_state":"provider_accepted","initial_notification_attempts":"={{ Number($('Send only eligible initial-alert retries').item.json.initial_notification_attempts || 0) + 1 }}","initial_notification_next_retry_at":null,"initial_notification_last_error":"","initial_notification_last_attempt_at":"={{ $now.toISO() }}","notification_state":"provider_accepted","last_notification_outcome":"provider_accepted","last_activity_at":"={{ $now.toISO() }}"}}
+      }
+    },
+    {
+      "id": "record-initial-retry-failure",
+      "name": "Record initial-alert retry result",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1140,
+        850
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {"__rl":true,"value":"REPLACE_WITH_DATA_TABLE_ID","mode":"id"},
+        "matchType": "allConditions",
+        "filters": {"conditions":[{"keyName":"inquiry_id","condition":"eq","keyValue":"={{ $('Send only eligible initial-alert retries').item.json.inquiry_id }}"}]},
+        "columns": {"mappingMode":"defineBelow","value":{"initial_notification_state":"={{ (() => { const n = Number($('Send only eligible initial-alert retries').item.json.initial_notification_attempts || 0) + 1; return n >= 3 ? 'initial_notification_failed' : 'retry_pending'; })() }}","initial_notification_attempts":"={{ Number($('Send only eligible initial-alert retries').item.json.initial_notification_attempts || 0) + 1 }}","initial_notification_next_retry_at":"={{ (() => { const n = Number($('Send only eligible initial-alert retries').item.json.initial_notification_attempts || 0) + 1; return n >= 3 ? null : new Date(Date.now() + 15 * 60000).toISOString(); })() }}","initial_notification_last_error":"={{ String($json.error?.message ?? $json.error ?? 'SMTP provider did not accept initial notification').slice(0, 500) }}","initial_notification_last_attempt_at":"={{ $now.toISO() }}","notification_state":"={{ (() => { const n = Number($('Send only eligible initial-alert retries').item.json.initial_notification_attempts || 0) + 1; return n >= 3 ? 'initial_notification_failed' : 'retry_pending'; })() }}","last_notification_outcome":"failed","error_state":"initial_notification_email_failed","last_activity_at":"={{ $now.toISO() }}"}}
       }
     },
     {
@@ -805,7 +899,7 @@
         ]
       ]
     },
-    "Hourly follow-up check": {
+    "Scheduled inquiry check (every 15 min)": {
       "main": [
         [
           {
@@ -832,6 +926,11 @@
         [
           {
             "node": "Send only eligible reminders",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send only eligible initial-alert retries",
             "type": "main",
             "index": 0
           }
@@ -867,6 +966,38 @@
         ],
         [
           {"node":"Record reminder retry pending","type":"main","index":0}
+        ]
+      ]
+    },
+    "Send only eligible initial-alert retries": {
+      "main": [
+        [
+          {
+            "node": "Retry internal new-inquiry alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry internal new-inquiry alert": {
+      "main": [
+        [
+          {
+            "node": "Initial-alert retry succeeded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initial-alert retry succeeded?": {
+      "main": [
+        [
+          {"node":"Record initial-alert retry accepted","type":"main","index":0}
+        ],
+        [
+          {"node":"Record initial-alert retry result","type":"main","index":0}
         ]
       ]
     }
