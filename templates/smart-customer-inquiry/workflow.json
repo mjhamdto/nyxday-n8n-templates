@@ -14,7 +14,7 @@
         "width": 760,
         "height": 300,
         "color": 2,
-        "content": "## Smart Customer Inquiry & Follow-Up Manager v1.1.2\n### How it works\nA public Form captures an inquiry. The workflow normalizes it, classifies priority, finds exact duplicate records, stores only new rows, then routes Critical/High/Normal/Low through a visible Switch before internal SMTP. Slack is optional and disabled. The hourly branch processes initial-alert retries separately from staged reminder/escalation state.\n\n### Setup\nCreate the typed Data Table schema in SETUP.md, replace `REPLACE_WITH_DATA_TABLE_ID` in all Data Table nodes, configure SMTP sender/recipients, privacy URL, and workflow timezone. Test the Form Trigger URL before publishing.\n\n### Customization tips\nThe workflow never sends customer marketing email. Change status in Data Tables; Waiting for customer pauses reminders, while Resolved and Closed stop them. Add rate limiting/WAF outside n8n for public forms."
+        "content": "## Smart Customer Inquiry & Follow-Up Manager v1.1.2\n\n### How it works\nThis workflow captures a customer inquiry with an n8n Form, normalizes and validates it, applies transparent priority rules, and suppresses exact duplicates before storing a durable Data Table record. A visible Switch sends the internal SMTP alert; Slack is optional, disabled by default, and only available for High/Critical items after explicit setup. The 15-minute scheduled branch re-reads saved state, retries failed initial alerts independently, then sends due reminders or escalation. Waiting for customer pauses follow-up; Resolved and Closed stop it.\n\n### Setup\n1. Create the typed table in SETUP.md.\n2. Replace every `REPLACE_WITH_DATA_TABLE_ID`.\n3. Attach SMTP credentials to all three email nodes; replace sender, ordinary, and escalation recipients.\n4. Replace the privacy URL placeholder, set workflow timezone, and review priority/follow-up settings.\n5. Leave Slack disabled unless deliberately configured.\n6. Test the Form Trigger URL, stored row, alert, duplicate, and reminder before publishing.\n\nSee SETUP.md for recovery and testing details. Never use this workflow for customer marketing email."
       }
     },
     {
@@ -45,7 +45,7 @@
       "webhookId": "smart-customer-inquiry",
       "parameters": {
         "formTitle": "Contact us",
-        "formDescription": "Tell us how we can help. We use this information only to respond to your inquiry; this acknowledgement is not marketing consent. Read this business's <a href=\"REPLACE_WITH_YOUR_PRIVACY_NOTICE_URL\" target=\"_blank\" rel=\"noopener noreferrer\">privacy notice</a> before submitting. Replace the placeholder with a public HTTPS URL before publishing.",
+        "formDescription": "Tell us how we can help. We use this information only to respond to your inquiry; this acknowledgement is not marketing consent. Read this business's <a href=\"https://REPLACE_WITH_YOUR_PRIVACY_NOTICE_URL\" target=\"_blank\" rel=\"noopener noreferrer\">privacy notice</a> before submitting. Replace the placeholder with a public HTTPS URL before publishing.",
         "formFields": {
           "values": [
             {
@@ -480,7 +480,7 @@
         "width": 1060,
         "height": 120,
         "color": 0,
-        "content": "## 3 · Scheduled checks, retries and escalation\nThis lower path runs every 15 minutes after publication. It re-reads durable records, sends due initial-alert retries separately, then evaluates reminders. Initial alerts retry at 15-minute intervals up to 3 total attempts. Reminder stages remain independent: successful SMTP acceptance advances `next_reminder_due_at`; failed reminder sends retry hourly without advancing stage."
+        "content": "## 3 · Scheduled checks and escalation\nEvery 15 minutes, this branch re-reads durable records. It sends due initial-alert retries separately, then evaluates reminders. Initial alerts retry up to 3 times. Reminder stages stay independent: provider acceptance advances `next_reminder_due_at`; failed reminder sends retry hourly without advancing stage."
       }
     },
     {
@@ -756,8 +756,24 @@
       "parameters": {
         "width": 320,
         "height": 120,
+        "color": 0,
+        "content": "## 4 · Failure handling\nStorage errors remain visible in Executions. Email failures retain the saved record. Reminder failures 1–2 are `retry_pending`; failure 3 is `delivery_failed`. Fix credentials, inspect durable state, then use the safe recovery steps in SETUP."
+      }
+    },
+    {
+      "id": "note-required-setup",
+      "name": "Required before publishing",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        20,
+        -520
+      ],
+      "parameters": {
+        "width": 330,
+        "height": 170,
         "color": 5,
-        "content": "## 4 · Failure handling\nStorage failures stop the run and remain visible in Executions. Email nodes continue after failure so the saved record is marked failed. Reminder delivery retries are bounded: failure 1–2 is `retry_pending`; failure 3 is `delivery_failed`. Fix credentials, inspect the execution, then reset only the failed reminder fields described in SETUP before resuming."
+        "content": "## Required before publishing\nReplace every Data Table ID, SMTP sender/recipients, and the privacy-notice URL placeholder. Attach SMTP credentials to all three email nodes. Test with synthetic data first. Do not activate this exported template unchanged."
       }
     }
   ],

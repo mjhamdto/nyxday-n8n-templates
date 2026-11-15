@@ -8,6 +8,10 @@ The test suite covers a valid non-ASCII sales inquiry, valid general normalizati
 
 ## Runtime acceptance checklist (pending an isolated n8n instance)
 
+### Clean-import publication check
+
+Use a new inactive workflow in an isolated project; do not reuse an already configured copy. Create a new Data Table using every typed column in SETUP.md, attach test SMTP credentials to all three email nodes, replace every Data Table ID and recipient/privacy placeholder, then follow the checklist below using synthetic data. Confirm the imported canvas is readable and the privacy link is clickable before activation.
+
 1. Import the JSON on n8n 2.45.0+ and confirm every built-in node resolves without migration errors.
 2. Configure a test Data Table and test SMTP mailbox, submit the first synthetic sales inquiry, and confirm one New row and one alert.
 3. Submit the exact payload again within 24 hours; confirm no second alert and `duplicate_suppressed` on the original row.
